@@ -1,0 +1,135 @@
+# Beta
+Test
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Black Ops Zombies - Offline Ready</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body, html {
+            width: 100vw;
+            height: 100vh;
+            background-color: #030303;
+            color: #ffffff;
+            font-family: system-ui, -apple-system, sans-serif;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        #status-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            border: 1px solid #444;
+            padding: 14px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 10;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+        }
+        .progress {
+            color: #00ff88;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container">
+        <div id="status-panel">
+            <div id="status-text">Verificando caché local...</div>
+        </div>
+        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
+    </div>
+
+    <script>
+        const CACHE_NAME = "zombies-offline-cache-v1";
+        const statusText = document.getElementById('status-text');
+
+        function actualizarEstado(mensaje) {
+            statusText.innerHTML = mensaje;
+            console.log("[Offline Mode]:", mensaje);
+        }
+
+        // Interceptor de red inteligente: busca primero en la caché local, si no está va a la red y lo guarda
+        const originalFetch = window.fetch;
+        window.fetch = async function(input, init) {
+            const url = typeof input === 'string' ? input : input.url;
+            
+            try {
+                const cache = await caches.open(CACHE_NAME);
+                let respuestaCache = await cache.match(url);
+
+                if (respuestaCache) {
+                    // ¡Encontrado en la memoria local! Funciona sin internet
+                    return respuestaCache.clone();
+                }
+
+                // Si no está guardado, lo descarga de internet y lo almacena para el futuro
+                actualizarEstado(`Descargando recurso por primera vez: <span class="progress">${url.split('/').pop()}</span>`);
+                const respuestaRed = await originalFetch(input, init);
+                
+                if (respuestaRed && respuestaRed.ok) {
+                    cache.put(url, respuestaRed.clone());
+                }
+
+                return respuestaRed;
+            } catch (e) {
+                console.warn("Sin conexión y el archivo no está en caché:", e);
+                return originalFetch(input, init);
+            }
+        };
+
+        // Iniciar la carga del motor principal del juego
+        async function CargarJuego() {
+            actualizarEstado("Iniciando entorno del juego...");
+
+            // Inyectamos el script principal que disparará las peticiones automáticas
+            const scriptJS = document.createElement('script');
+            scriptJS.src = "https://vel.gg/bsz/artifacts/KisakBlack-web.js";
+            
+            scriptJS.onerror = () => {
+                actualizarEstado("⚠️ Sin internet y los archivos no están guardados. Conéctate una vez para cachearlos.");
+            };
+
+            scriptJS.onload = () => {
+                actualizarEstado("✨ ¡Listo! Sistema funcionando (Caché activa).");
+            };
+
+            document.body.appendChild(scriptJS);
+        }
+
+        var Module = {
+            canvas: document.getElementById('canvas'),
+            print: (text) => console.log(text),
+            printErr: (text) => console.error(text),
+            setStatus: (text) => {
+                if (text) actualizarEstado(text);
+            }
+        };
+
+        window.onload = CargarJuego;
+    </script>
+</body>
+</html>
