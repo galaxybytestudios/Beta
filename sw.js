@@ -1,34 +1,34 @@
-const CACHE_NAME = 'bo1-zombies-cache-v2';
-const TARGET_DOMAIN = 'vel.gg';
-
-self.addEventListener('install', (event) => {
+// sw.js - Service Worker para forzar SharedArrayBuffer
+self.addEventListener("install", (e) => {
     self.skipWaiting();
 });
 
-self.addEventListener('activate', (event) => {
-    event.waitUntil(clients.claim());
+self.addEventListener("activate", (e) => {
+    e.waitUntil(self.clients.claim());
 });
 
-self.addEventListener('fetch', (event) => {
-    const url = new URL(event.request.url);
+self.addEventListener("fetch", (event) => {
+    event.respondWith(
+        fetch(event.request)
+            .then((response) => {
+                // Si la respuesta es opaca o externa, se devuelve tal cual
+                if (!response || response.status !== 200 || response.type === 'opaque') {
+                    return response;
+                }
 
-    // Interceptar cualquier recurso o subruta que pertenezca a vel.gg (mapas, wasm, bin, etc.)
-    if (url.hostname.includes(TARGET_DOMAIN)) {
-        event.respondWith(
-            caches.open(CACHE_NAME).then(async (cache) => {
-                const cachedResponse = await cache.match(event.request);
-                
-                const fetchPromise = fetch(event.request).then((networkResponse) => {
-                    if (networkResponse && networkResponse.status === 200) {
-                        cache.put(event.request, networkResponse.clone());
-                    }
-                    return networkResponse;
-                }).catch(() => {
-                    // Si estás offline, continúa usando el caché local sin romper el juego
+                // Clonamos los headers para agregar las políticas de aislamiento
+                const newHeaders = new Headers(response.headers);
+                newHeaders.set("Cross-Origin-Opener-Policy", "same-origin");
+                newHeaders.set("Cross-Origin-Embedder-Policy", "require-corp");
+
+                return new Response(response.body, {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: newHeaders,
                 });
-
-                return cachedResponse || fetchPromise;
             })
-        );
-    }
+            .catch(() => {
+                return fetch(event.request);
+            })
+    );
 });
