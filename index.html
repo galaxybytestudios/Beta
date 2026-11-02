@@ -6,6 +6,10 @@ Test
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BO1 Zombies - Offline Launcher</title>
+    
+    <!-- Script automático para habilitar SharedArrayBuffer (COOP/COEP) en el navegador -->
+    <script src="https://unpkg.com/coi-serviceworker@0.1.7/coi-serviceworker.min.js"></script>
+
     <style>
         body, html {
             margin: 0;
@@ -41,8 +45,8 @@ Test
 
     <div id="status">Iniciando sistema offline...</div>
 
-    <!-- Iframe que carga el juego -->
-    <iframe id="gameFrame" src="https://vel.gg/bsz"></iframe>
+    <!-- Iframe que carga el juego con permisos de aislamiento -->
+    <iframe id="gameFrame" src="https://vel.gg/bsz" allow="cross-origin-isolated"></iframe>
 
     <script>
         const statusDiv = document.getElementById('status');
