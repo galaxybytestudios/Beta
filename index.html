@@ -5,11 +5,7 @@ Test
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BO1 Zombies - Offline Launcher</title>
-    
-    <!-- Script automático para habilitar SharedArrayBuffer (COOP/COEP) en el navegador -->
-    <script src="https://unpkg.com/coi-serviceworker@0.1.7/coi-serviceworker.min.js"></script>
-
+    <title>BO1 Zombies - Port Online</title>
     <style>
         body, html {
             margin: 0;
@@ -18,21 +14,6 @@ Test
             height: 100%;
             background: #000;
             overflow: hidden;
-            font-family: sans-serif;
-            color: #fff;
-        }
-        #status {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0,0,0,0.85);
-            padding: 8px 14px;
-            border-radius: 6px;
-            font-size: 13px;
-            z-index: 10;
-            border: 1px solid #444;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
-            transition: opacity 0.5s ease;
         }
         iframe {
             width: 100%;
@@ -43,51 +24,10 @@ Test
 </head>
 <body>
 
-    <div id="status">Iniciando sistema offline...</div>
-
-    <!-- Iframe que carga el juego con permisos de aislamiento -->
-    <iframe id="gameFrame" src="https://vel.gg/bsz" allow="cross-origin-isolated"></iframe>
-
-    <script>
-        const statusDiv = document.getElementById('status');
-
-        function updateStatus(text, duration = 4000) {
-            statusDiv.innerText = text;
-            statusDiv.style.opacity = '1';
-            if (duration) {
-                setTimeout(() => {
-                    statusDiv.style.opacity = '0.3';
-                }, duration);
-            }
-        }
-
-        // Registrar el Service Worker externo de forma limpia y sin restricciones
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('./sw.js')
-                .then(() => {
-                    console.log("Service Worker registrado con éxito.");
-                    if (navigator.onLine) {
-                        updateStatus("Online: Juego sincronizado con caché local.");
-                    } else {
-                        updateStatus("Modo Offline: Ejecutando desde almacenamiento local.");
-                    }
-                })
-                .catch((err) => {
-                    console.error("Error al registrar el Service Worker:", err);
-                    updateStatus("Aviso: No se pudo activar el caché offline.");
-                });
-        } else {
-            updateStatus("Tu navegador no soporta Service Workers.");
-        }
-
-        window.addEventListener('online', () => {
-            updateStatus("Conexión restablecida. Buscando actualizaciones...");
-        });
-
-        window.addEventListener('offline', () => {
-            updateStatus("Sin conexión a internet. Jugando en modo offline.");
-        });
-    </script>
+    <!-- Este iframe carga la estructura del juego original, 
+         pero al estar dentro de tu dominio con _headers, el navegador le otorga 
+         los permisos de SharedArrayBuffer que necesita para arrancar -->
+    <iframe src="https://vel.gg/bsz" allow="autoplay; fullscreen; cross-origin-isolated; shared-array-buffer"></iframe>
 
 </body>
 </html>
