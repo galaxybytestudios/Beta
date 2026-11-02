@@ -4,132 +4,128 @@ Test
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Black Ops Zombies - Offline Ready</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BO1 Zombies - Offline Launcher</title>
     <style>
-        * {
+        body, html {
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
-        }
-        body, html {
-            width: 100vw;
-            height: 100vh;
-            background-color: #030303;
-            color: #ffffff;
-            font-family: system-ui, -apple-system, sans-serif;
-            overflow: hidden;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-            position: relative;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        canvas {
             width: 100%;
             height: 100%;
-            display: block;
+            background: #000;
+            overflow: hidden;
+            font-family: sans-serif;
+            color: #fff;
         }
-        #status-panel {
+        #status {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            background: rgba(0, 0, 0, 0.9);
-            border: 1px solid #444;
-            padding: 14px 20px;
-            border-radius: 8px;
-            font-size: 14px;
+            top: 10px;
+            left: 10px;
+            background: rgba(0,0,0,0.85);
+            padding: 8px 14px;
+            border-radius: 6px;
+            font-size: 13px;
             z-index: 10;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.7);
+            border: 1px solid #444;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: opacity 0.5s ease;
         }
-        .progress {
-            color: #00ff88;
-            font-weight: bold;
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
         }
     </style>
 </head>
 <body>
 
-    <div id="canvas-container">
-        <div id="status-panel">
-            <div id="status-text">Verificando caché local...</div>
-        </div>
-        <canvas id="canvas" oncontextmenu="event.preventDefault()"></canvas>
-    </div>
+    <div id="status">Iniciando sistema offline...</div>
+
+    <!-- Iframe que carga el juego -->
+    <iframe id="gameFrame" src="https://vel.gg/bsz"></iframe>
 
     <script>
-        const CACHE_NAME = "zombies-offline-cache-v1";
-        const statusText = document.getElementById('status-text');
+        const statusDiv = document.getElementById('status');
 
-        function actualizarEstado(mensaje) {
-            statusText.innerHTML = mensaje;
-            console.log("[Offline Mode]:", mensaje);
+        function updateStatus(text, duration = 4000) {
+            statusDiv.innerText = text;
+            statusDiv.style.opacity = '1';
+            if (duration) {
+                setTimeout(() => {
+                    statusDiv.style.opacity = '0.3';
+                }, duration);
+            }
         }
 
-        // Interceptor de red inteligente: busca primero en la caché local, si no está va a la red y lo guarda
-        const originalFetch = window.fetch;
-        window.fetch = async function(input, init) {
-            const url = typeof input === 'string' ? input : input.url;
-            
-            try {
-                const cache = await caches.open(CACHE_NAME);
-                let respuestaCache = await cache.match(url);
+        // Registrar Service Worker dinámicamente mediante Blob URL para que todo funcione en un solo archivo HTML
+        if ('serviceWorker' in navigator) {
+            const swCode = `
+                const CACHE_NAME = 'bo1-zombies-cache-v1';
+                const TARGET_ORIGIN = 'https://vel.gg';
 
-                if (respuestaCache) {
-                    // ¡Encontrado en la memoria local! Funciona sin internet
-                    return respuestaCache.clone();
-                }
+                self.addEventListener('install', (event) => {
+                    self.skipWaiting();
+                });
 
-                // Si no está guardado, lo descarga de internet y lo almacena para el futuro
-                actualizarEstado(`Descargando recurso por primera vez: <span class="progress">${url.split('/').pop()}</span>`);
-                const respuestaRed = await originalFetch(input, init);
-                
-                if (respuestaRed && respuestaRed.ok) {
-                    cache.put(url, respuestaRed.clone());
-                }
+                self.addEventListener('activate', (event) => {
+                    event.waitUntil(clients.claim());
+                });
 
-                return respuestaRed;
-            } catch (e) {
-                console.warn("Sin conexión y el archivo no está en caché:", e);
-                return originalFetch(input, init);
-            }
-        };
+                self.addEventListener('fetch', (event) => {
+                    const url = new URL(event.request.url);
 
-        // Iniciar la carga del motor principal del juego
-        async function CargarJuego() {
-            actualizarEstado("Iniciando entorno del juego...");
+                    // Interceptar solicitudes hacia el juego para aplicar estrategia Cache First con actualización en segundo plano (Stale-While-Revalidate)
+                    if (url.origin === TARGET_ORIGIN || url.href.includes('vel.gg/bsz')) {
+                        event.respondWith(
+                            caches.open(CACHE_NAME).then(async (cache) => {
+                                const cachedResponse = await cache.match(event.request);
+                                
+                                const fetchPromise = fetch(event.request).then((networkResponse) => {
+                                    if (networkResponse && networkResponse.status === 200) {
+                                        cache.put(event.request, networkResponse.clone());
+                                    }
+                                    return networkResponse;
+                                }).catch(() => {
+                                    // Si falla la red, ignoramos el error para seguir usando el caché local
+                                });
 
-            // Inyectamos el script principal que disparará las peticiones automáticas
-            const scriptJS = document.createElement('script');
-            scriptJS.src = "https://vel.gg/bsz/artifacts/KisakBlack-web.js";
-            
-            scriptJS.onerror = () => {
-                actualizarEstado("⚠️ Sin internet y los archivos no están guardados. Conéctate una vez para cachearlos.");
-            };
+                                // Si está en caché, lo devuelve al instante y actualiza en segundo plano; si no, espera a la red.
+                                return cachedResponse || fetchPromise;
+                            })
+                        );
+                    }
+                });
+            `;
 
-            scriptJS.onload = () => {
-                actualizarEstado("✨ ¡Listo! Sistema funcionando (Caché activa).");
-            };
+            const blob = new Blob([swCode], { type: 'text/javascript' });
+            const swUrl = URL.createObjectURL(blob);
 
-            document.body.appendChild(scriptJS);
+            navigator.serviceWorker.register(swUrl)
+                .then(() => {
+                    console.log("Service Worker activo y controlando caché.");
+                    if (navigator.onLine) {
+                        updateStatus("Online: Juego sincronizado con caché local.");
+                    } else {
+                        updateStatus("Modo Offline: Ejecutando desde almacenamiento local.");
+                    }
+                })
+                .catch((err) => {
+                    console.error("Error al registrar el Service Worker:", err);
+                    updateStatus("Aviso: El almacenamiento local avanzado no está disponible.");
+                });
+        } else {
+            updateStatus("Tu navegador no soporta Service Workers.");
         }
 
-        var Module = {
-            canvas: document.getElementById('canvas'),
-            print: (text) => console.log(text),
-            printErr: (text) => console.error(text),
-            setStatus: (text) => {
-                if (text) actualizarEstado(text);
-            }
-        };
+        // Control de eventos de red en tiempo real
+        window.addEventListener('online', () => {
+            updateStatus("Conexión restablecida. Buscando actualizaciones...");
+        });
 
-        window.onload = CargarJuego;
+        window.addEventListener('offline', () => {
+            updateStatus("Sin conexión a internet. Jugando en modo offline.");
+        });
     </script>
+
 </body>
 </html>
