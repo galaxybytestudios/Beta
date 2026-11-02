@@ -1,5 +1,5 @@
-const CACHE_NAME = 'bo1-zombies-cache-v1';
-const TARGET_ORIGIN = 'https://vel.gg';
+const CACHE_NAME = 'bo1-zombies-cache-v2';
+const TARGET_DOMAIN = 'vel.gg';
 
 self.addEventListener('install', (event) => {
     self.skipWaiting();
@@ -12,8 +12,8 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
     const url = new URL(event.request.url);
 
-    // Interceptar solicitudes hacia el juego para aplicar estrategia Cache First con actualización en segundo plano
-    if (url.origin === TARGET_ORIGIN || url.href.includes('vel.gg/bsz')) {
+    // Interceptar cualquier recurso o subruta que pertenezca a vel.gg (mapas, wasm, bin, etc.)
+    if (url.hostname.includes(TARGET_DOMAIN)) {
         event.respondWith(
             caches.open(CACHE_NAME).then(async (cache) => {
                 const cachedResponse = await cache.match(event.request);
@@ -24,7 +24,7 @@ self.addEventListener('fetch', (event) => {
                     }
                     return networkResponse;
                 }).catch(() => {
-                    // Si falla la red, continuamos usando el caché local sin errores
+                    // Si estás offline, continúa usando el caché local sin romper el juego
                 });
 
                 return cachedResponse || fetchPromise;
