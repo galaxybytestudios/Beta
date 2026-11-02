@@ -57,52 +57,11 @@ Test
             }
         }
 
-        // Registrar Service Worker dinámicamente mediante Blob URL para que todo funcione en un solo archivo HTML
+        // Registrar el Service Worker externo de forma limpia y sin restricciones
         if ('serviceWorker' in navigator) {
-            const swCode = `
-                const CACHE_NAME = 'bo1-zombies-cache-v1';
-                const TARGET_ORIGIN = 'https://vel.gg';
-
-                self.addEventListener('install', (event) => {
-                    self.skipWaiting();
-                });
-
-                self.addEventListener('activate', (event) => {
-                    event.waitUntil(clients.claim());
-                });
-
-                self.addEventListener('fetch', (event) => {
-                    const url = new URL(event.request.url);
-
-                    // Interceptar solicitudes hacia el juego para aplicar estrategia Cache First con actualización en segundo plano (Stale-While-Revalidate)
-                    if (url.origin === TARGET_ORIGIN || url.href.includes('vel.gg/bsz')) {
-                        event.respondWith(
-                            caches.open(CACHE_NAME).then(async (cache) => {
-                                const cachedResponse = await cache.match(event.request);
-                                
-                                const fetchPromise = fetch(event.request).then((networkResponse) => {
-                                    if (networkResponse && networkResponse.status === 200) {
-                                        cache.put(event.request, networkResponse.clone());
-                                    }
-                                    return networkResponse;
-                                }).catch(() => {
-                                    // Si falla la red, ignoramos el error para seguir usando el caché local
-                                });
-
-                                // Si está en caché, lo devuelve al instante y actualiza en segundo plano; si no, espera a la red.
-                                return cachedResponse || fetchPromise;
-                            })
-                        );
-                    }
-                });
-            `;
-
-            const blob = new Blob([swCode], { type: 'text/javascript' });
-            const swUrl = URL.createObjectURL(blob);
-
-            navigator.serviceWorker.register(swUrl)
+            navigator.serviceWorker.register('./sw.js')
                 .then(() => {
-                    console.log("Service Worker activo y controlando caché.");
+                    console.log("Service Worker registrado con éxito.");
                     if (navigator.onLine) {
                         updateStatus("Online: Juego sincronizado con caché local.");
                     } else {
@@ -111,13 +70,12 @@ Test
                 })
                 .catch((err) => {
                     console.error("Error al registrar el Service Worker:", err);
-                    updateStatus("Aviso: El almacenamiento local avanzado no está disponible.");
+                    updateStatus("Aviso: No se pudo activar el caché offline.");
                 });
         } else {
             updateStatus("Tu navegador no soporta Service Workers.");
         }
 
-        // Control de eventos de red en tiempo real
         window.addEventListener('online', () => {
             updateStatus("Conexión restablecida. Buscando actualizaciones...");
         });
